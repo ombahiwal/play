@@ -1,0 +1,299 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Resources:
+  theVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/19
+      EnableDnsSupport: 'false'
+      EnableDnsHostnames: 'false'
+      InstanceTenancy: default
+      Tags:
+      - Key: TEST
+        Value: CloudFormation-3T VPC
+        
+  websubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: theVPC
+      CidrBlock: 10.0.0.0/22
+      AvailabilityZone: us-east-1a
+      Tags:
+      - Key: TEST2
+        Value: Web Subnet 1
+  websubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: theVPC
+      CidrBlock: 10.0.4.0/22
+      AvailabilityZone: us-east-1b
+      Tags:
+      - Key: TEST2
+        Value: Web Subnet 2
+        
+  appsubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: theVPC
+      CidrBlock: 10.0.8.0/22
+      AvailabilityZone: us-east-1a
+      Tags:
+      - Key: TEST2
+        Value: App Subnet 1 
+        
+  appsubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: theVPC
+      CidrBlock: 10.0.12.0/22
+      AvailabilityZone: us-east-1b
+      Tags:
+      - Key: TEST2
+        Value: App Subnet 2
+        
+  dbsubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: theVPC
+      CidrBlock: 10.0.16.0/22
+      AvailabilityZone: us-east-1a
+      Tags:
+      - Key: TEST2
+        Value: DB Subnet 1
+        
+  IVPCRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: theVPC
+      Tags:
+      - Key: TEST2
+        Value: Internet Route table for theVPC 
+        
+#  myInternetGateway:
+#    Type: AWS::EC2::InternetGateway
+#    Properties:
+#      Tags:
+#      - Key: TEST2
+#        Value: IGW for theVPC RT        
+#        
+#  AttachGateway:
+#    Type: AWS::EC2::VPCGatewayAttachment
+#    Properties:
+#        VpcId:
+#            Ref: theVPC
+#        InternetGatewayId:
+#            Ref: myInternetGateway        
+#        
+#  IGWRoute:
+#    Type: AWS::EC2::Route
+#    DependsOn: myInternetGateway
+#    Properties:
+#      RouteTableId:
+#        Ref: IVPCRouteTable
+#      DestinationCidrBlock: 0.0.0.0/0
+#      GatewayId:
+#        Ref: myInternetGateway
+        
+  WebSubnetAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: websubnet2
+      RouteTableId:
+        Ref: IVPCRouteTable
+
+  WebSubnetAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: websubnet2
+      RouteTableId:
+        Ref: IVPCRouteTable
+        
+  APPDBRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: theVPC
+      Tags:
+      - Key: TEST2
+        Value: RouteTable for APP DB in place
+
+  NATInstance: 
+      Type: AWS::EC2::Instance
+      Properties: 
+        ImageId: "ami-0422d936d535c63b1"
+        KeyName: "virginia"
+        SourceDestCheck: "false"
+        BlockDeviceMappings: 
+          - DeviceName: "/dev/sdm"
+            Ebs: 
+              VolumeType: "gp2"
+              DeleteOnTermination: "false"
+              VolumeSize: "20"
+          - DeviceName: "/dev/sdk"
+            NoDevice: {}
+
+  NATRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: APPDBRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      InstanceId:
+        Ref: NATInstance
+        
+  AppSubnetAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: appsubnet1
+      RouteTableId:
+        Ref: APPDBRouteTable
+        
+  AppSubnetAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: appsubnet2
+      RouteTableId:
+        Ref: APPDBRouteTable
+        
+  DBSubnetAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: dbsubnet1
+      RouteTableId:
+        Ref: APPDBRouteTable
+
+  InstancesSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow http to client host
+      VpcId:
+        Ref: theVPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+
+
+  AppInstance1: 
+      Type: AWS::EC2::Instance
+      Properties: 
+        ImageId: "ami-0ec1ad91f200c15a8"
+        KeyName: "virginia"
+        SubnetId: 
+            Ref: appsubnet1
+        BlockDeviceMappings: 
+          - DeviceName: "/dev/sdm"
+            Ebs: 
+              VolumeType: "gp2"
+              DeleteOnTermination: "false"
+              VolumeSize: "20"
+          - DeviceName: "/dev/sdk"
+            NoDevice: {}
+  
+  AppInstance2: 
+      Type: AWS::EC2::Instance
+      Properties: 
+        ImageId: "ami-0ec1ad91f200c15a8"
+        KeyName: "virginia"
+        SubnetId: 
+            Ref: appsubnet2
+        
+        BlockDeviceMappings: 
+          - DeviceName: "/dev/sdm"
+            Ebs: 
+              VolumeType: "gp2"
+              DeleteOnTermination: "false"
+              VolumeSize: "20"
+          - DeviceName: "/dev/sdk"
+            NoDevice: {}
+
+  WebInstance1: 
+      Type: AWS::EC2::Instance
+      Properties: 
+        ImageId: "ami-0ec1ad91f200c15a8"
+        KeyName: "virginia"
+        SubnetId: 
+            Ref: websubnet1
+       
+        BlockDeviceMappings: 
+          - DeviceName: "/dev/sdm"
+            Ebs: 
+              VolumeType: "gp2"
+              DeleteOnTermination: "false"
+              VolumeSize: "20"
+          - DeviceName: "/dev/sdk"
+            NoDevice: {}
+            
+  WebInstance2: 
+      Type: AWS::EC2::Instance
+      Properties: 
+        ImageId: "ami-0ec1ad91f200c15a8"
+        KeyName: "virginia"
+        SubnetId: 
+            Ref: websubnet2
+
+        BlockDeviceMappings: 
+          - DeviceName: "/dev/sdm"
+            Ebs: 
+              VolumeType: "gp2"
+              DeleteOnTermination: "false"
+              VolumeSize: "20"
+          - DeviceName: "/dev/sdk"
+            NoDevice: {}
+            
+  DBInstance1: 
+      Type: AWS::EC2::Instance
+      Properties: 
+        ImageId: "ami-0ec1ad91f200c15a8"
+        KeyName: "virginia"
+        SubnetId: 
+            Ref: dbsubnet1
+        DestinationSecurityGroupId:
+            Ref: InstancesSecurityGroup
+        BlockDeviceMappings: 
+          - DeviceName: "/dev/sdm"
+            Ebs: 
+              VolumeType: "gp2"
+              DeleteOnTermination: "false"
+              VolumeSize: "20"
+          - DeviceName: "/dev/sdk"
+            NoDevice: {}
+            
+  ElasticLoadBalancerAPP:
+      Type: AWS::ElasticLoadBalancing::LoadBalancer
+      Properties:
+        AvailabilityZones:
+            Fn::GetAZs: ''
+        Instances:
+        - Ref: WebInstance1
+        - Ref: WebInstance2
+        Listeners:
+        - LoadBalancerPort: '80'
+        InstancePort: '80'
+        Protocol: HTTP
+        HealthCheck:
+            Target:
+                Fn::Join:
+                - ''
+                - - 'HTTP:80/'
+            HealthyThreshold: '3'
+            UnhealthyThreshold: '5'
+            Interval: '30'
+            Timeout: '5'
+        
